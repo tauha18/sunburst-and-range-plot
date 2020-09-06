@@ -11,15 +11,15 @@ function [phl, thl] = sunburstplot(filename,varargin)
 %  (default uses distinguishable_colors code to generate colors)
 %  varargin{2}: Root label (default: "")
 %  varargin{3}: Value display flag: 0. No values 1. numbers 2. percentages (default)
-%  varargin{4}: Label rotation flag: 0. do not rotate 1. rotate label
-%  according to sector angles (default) 2. rotate so that sector labels are radially positioned
+%  varargin{4}: Label rotation flag: 0. do not rotate 1. rotate label according to sector angles (default)
+%  2. rotate labels so that sector labels appear radially (Labels in 2nd leaves level and above are radially plotted by default)
 %  varargin{5}: Root circle radius (change to accomodate Root label if needed) (default=0.5)
 %  other options present in the start that can be changed (without detailed code understanding) are:
+%  varargin{6}: Plotting direction: 0. clockwise 1. couter clockwise (default = 1)
+%  varargin{7}: Starting angle in radians for first sector (default 0)
 %  1. Sector width (default=1) 2. Space between rings (default=0)
-%  3. Starting angle in radians for first sector (default 0) 
-%  4. Plotting direction: 0. clockwise 1. couter clockwise (default = 1)
-%  5. Ring color transparency range (default: [0.5 0.2])
-%  6. Font name (default: Arial) 7. Font size (default: 11)
+%  3. Ring color transparency range (default: [0.5 0.2])
+%  4. Font name (default: Arial) 5. Font size (default: 11)
 %
 % Arguments: (output)
 %  phl - handle to the sector patches. Each ring patches have their own
@@ -36,10 +36,11 @@ Rootlabel="";   % Label to appear at root
 valflag=2;      % value display flag
 rotflag=1;      % label rotation flag
 rootrad=0.5;    % Radius of root label circle
+stdir=1;        % patch plotting direction
+stangle=0*pi/180; % starting angle of first sector
+
 secwidth=1.25;  % width of circle rings
 ringgap=0.0;    % space between subsequent rings
-stangle=pi/2*0; % starting angle of first sector
-stdir=1;        % patch plotting direction
 alpharange=[0.5 0.2]; % patch transparency range
 fontnm='Arial'; %text font name
 fontpt=11;      % font size
@@ -73,22 +74,49 @@ for i=1:length(varargin)
         case 1
             if ~isempty(varargin{1})
                 clrmp = varargin{1};
-            end
+            end            
         case 2
             if ~isempty(varargin{2})
                 Rootlabel = varargin{2};
             end
+            if ~(isa(Rootlabel,'string') || isa(Rootlabel,'char'))
+                error('Label should either string or character type');
+            end
         case 3
-            if ~isempty(varargin{3})
+            if ~isempty(varargin{3})                
                 valflag = varargin{3};
+                if ~ismember(valflag,[0 1 2])
+                    error('Label value flag should be either 0, 1 or 2');
+                end
             end
         case 4
             if ~isempty(varargin{4})
                 rotflag = varargin{4};
             end
+            if ~ismember(rotflag,[0 1 2])
+                error('Label rotation flag should be either 0, 1 or 2');
+            end
         case 5
             if ~isempty(varargin{5})
                 rootrad = varargin{5};
+            end
+            if ~isnumeric(rootrad) || rootrad<0
+                error('Root radius should be a positive number');
+            end
+        case 6            
+            if ~isempty(varargin{6})
+                stdir = varargin{6};
+            end
+            if ~ismember(stdir,[0 1])
+                error('Plotting direction flag should be either 0 or 1');
+            end
+        case 7
+            if ~isempty(varargin{7})
+                if varargin{7}<0 || varargin{7}>360
+                    error('Starting angle should be between 0 and 360 degrees');
+                else
+                stangle = varargin{7}*pi/180;
+                end
             end
         otherwise
             error('Too many input arguments');
@@ -105,8 +133,8 @@ seclabels=cell(1,colno);
 for i=1:colno
     seclabels(i)={unique(string(table2cell(datatree(:,i))))};
     seclabels{i}(seclabels{:,i}=="" | seclabels{:,i}==" " | ismissing(seclabels{:,i}))=[];
-    if stdir
-        seclabels{i}=fliplr(seclabels{i});
+    if ~stdir
+        seclabels{i}=seclabels{i}(fliplr(1:length(seclabels{i})),1);
     end
 end
 
@@ -183,7 +211,7 @@ for i = 1:branches % sector plotting is done branch-wise
             if (fractangl1(2)-fractangl1(1))~=0 % plot if sector exists
                 phl(i,phl1id,1)=polsect(fractangl1(1),fractangl1(2),r0,r1,cl,patchalphal1); % plot sector
                 labelRadius=(r0+r1)/2;centerTheta=mean(fractangl1);
-                [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5);
+                [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,45/2);
                 [xtext,ytext] = pol2cart(centerTheta,labelRadius);
                 switch valflag
                     case 0
@@ -198,7 +226,7 @@ for i = 1:branches % sector plotting is done branch-wise
             else
                 phl(i,phl1id,1)=0;thl(i,phl1id,1)=0;
             end
-            if exist('leaves2','var') % if Level 2 leaves column exist
+            if exist('leaves2','var') % if level 2 leaves column exist
                 fractangl2=fractangl1(1);phl2id=2;
                 for k=1:leaves2
                     r0 = rootrad+secwidth*2;r1 = rootrad+secwidth*2+(secwidth-ringgap);% width of sector
@@ -208,7 +236,8 @@ for i = 1:branches % sector plotting is done branch-wise
                     
                     if (fractangl2(2)-fractangl2(1))~=0 % plot if sector exists
                         phl(i,phl1id,phl2id)=polsect(fractangl2(1),fractangl2(2),r0,r1,cl,patchalphal2); % plot sector
-                        labelRadius=(r0+r1)/2;centerTheta=mean(fractangl2);[halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5/2);
+                        labelRadius=(r0+r1)/2;centerTheta=mean(fractangl2);
+                        [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,2,45/4);
                         [xtext,ytext] = pol2cart(centerTheta,labelRadius);
                         switch valflag
                             case 0
@@ -223,7 +252,7 @@ for i = 1:branches % sector plotting is done branch-wise
                     else
                         phl(i,phl1id,phl2id)=0;thl(i,phl1id,phl2id)=0;
                     end
-                    if exist('leaves3','var') % if Level 3 leaves column exist
+                    if exist('leaves3','var') % if level 3 leaves column exist
                         fractangl3=fractangl2(1);phl3id=2;
                         for m=1:leaves3
                             r0 = rootrad+secwidth*3;r1 = rootrad+secwidth*3+(secwidth-ringgap);% width of sector
@@ -234,13 +263,7 @@ for i = 1:branches % sector plotting is done branch-wise
                             if (fractangl3(2)-fractangl3(1))~=0 % plot if sector exists
                                 phl(i,phl1id,phl2id,phl3id)=polsect(fractangl3(1),fractangl3(2),r0,r1,cl,patchalphal3); % plot sector
                                 labelRadius=(r0+r1)/2;centerTheta=mean(fractangl3);
-                                %[halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5/2/2);
-                                halign='center';valign='middle';angle=mod(round(centerTheta*180/pi/(22.5/4))*22.5/4,360);
-                                if angle>90 && angle<270
-                                    rotang=centerTheta*180/pi-180;
-                                else
-                                    rotang=centerTheta*180/pi;
-                                end
+                                [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,2,45/8);                                
                                 [xtext,ytext] = pol2cart(centerTheta,labelRadius);
                                 switch valflag
                                     case 0
@@ -289,10 +312,10 @@ function [halign, valign,rotangle] = getAlignmentFromAngle(angle,rotflag,modangl
 % Determine the text label alignment and rotation based on the angle around the circle.
 
 % Convert the angle to degrees
-angle = (180/pi)*angle;
+anglerad = (180/pi)*angle;
 
 % Round the angles to the nearest modangle in degrees
-angle = mod(round(angle/modangle)*modangle,360);
+anglemod = mod(round(anglerad/modangle)*modangle,360);
 
 % Determine the horizontal alignment (center works best usually)
 %{
@@ -318,14 +341,22 @@ end
 valign='middle';
 
 % Calculate rotation angle
-if angle>=0 && angle<180
-    rotangle=angle-90;
-elseif angle>=180 && angle<270
-    rotangle=angle-180;
-elseif angle>=270 && angle<360
-    rotangle=angle-270;
-end
-if ~rotflag
-    rotangle=0;
+switch rotflag
+    case 0
+        rotangle=0;
+    case 1        
+        if anglemod>=0 && anglemod<180
+            rotangle=anglemod-90;
+        elseif anglemod>=180 && anglemod<270
+            rotangle=anglemod-180;
+        elseif anglemod>=270 && anglemod<360
+            rotangle=anglemod-270;
+        end
+    case 2
+        if anglemod>90 && anglemod<270
+            rotangle=anglerad-180;
+        else
+            rotangle=anglerad;
+        end
 end
 end

@@ -7,8 +7,8 @@ options.patchHeigth=0.3;options.YStep=3;options.formatstr={'%1.1f';'%0.2f';'%1.2
 h=rangedotplot(ax1,series,values,options);title('Range Plot');
 %% sunburst plot example
 ax2=nexttile;
-patchhl=sunburstplot('testdata.csv',[],"Sales",2,[],0.7);title(['Sunburst or' sprintf('\n') 'Polar Treemap Plot']);
+[patchhl, labelhl]=sunburstplot('testdata.csv',[],"Sales",2,1,0.7,1,340);title(['Sunburst or' sprintf('\n') 'Polar Treemap Plot']);
 %sunburstplot('testdata.xlsx',{'r','g','b'},"Books",1);
 %sunburstplot('testdata.xlsx',{[1 0 0],[0 1 0],[1 1 0]},"Sports",[],1);
-%patchhl=sunburst('testdata.xlsx',[],"Coffee",0);
+%[patchhl, labelhl]=sunburstplot('testdata.xlsx',[],"Coffee",0,[],[],0,192); %takes sometime if plotting all four columns of coffee dataset
 set(gcf, 'Color', 'w');
