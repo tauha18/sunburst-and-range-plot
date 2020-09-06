@@ -1,6 +1,6 @@
-function hl = sunburstplot(filename,varargin)
+function [phl, thl] = sunburstplot(filename,varargin)
 % Author: Muhammad Tauha Ali (August 2020)
-%% sunburst:
+%% Sunburst Plot/Polar Treemap Plot:
 % datatree: cell type data. Each column denotes ring level. (do not include header)
 % Column format: 1. branches 2. Leaves (only three levels allowed at this time)
 % Every column should contain sector labels as strings
@@ -11,33 +11,38 @@ function hl = sunburstplot(filename,varargin)
 %  (default uses distinguishable_colors code to generate colors)
 %  varargin{2}: Root label (default: "")
 %  varargin{3}: Value display flag: 0. No values 1. numbers 2. percentages (default)
-%  varargin{4}: Label rotation flag: 0. do not rotate 1. rotate label according to sector angles (default)
+%  varargin{4}: Label rotation flag: 0. do not rotate 1. rotate label
+%  according to sector angles (default) 2. rotate so that sector labels are radially positioned
 %  varargin{5}: Root circle radius (change to accomodate Root label if needed) (default=0.5)
-%  other options that can be changed in code (without detailed understanding) are:
+%  other options present in the start that can be changed (without detailed code understanding) are:
 %  1. Sector width (default=1) 2. Space between rings (default=0)
-%  3. Starting angle in radians for first sector (default 0) 4. Ring transparency range (default: [0.5 0.2])
-%  5. Font name (default: Arial) 6. Font size (default: 11)
+%  3. Starting angle in radians for first sector (default 0) 
+%  4. Plotting direction: 0. clockwise 1. couter clockwise (default = 1)
+%  5. Ring color transparency range (default: [0.5 0.2])
+%  6. Font name (default: Arial) 7. Font size (default: 11)
 %
 % Arguments: (output)
-%  hl - handle to the sector patches. Each ring patches have their own
+%  phl - handle to the sector patches. Each ring patches have their own
 %  dimension i.e. First dimension represent first ring, second dimension
 %  represent second ring and so on
+%  thl - handle to the sector labels in similar manner to patch handles
 % Examples:
 %   sunburstplot(filename,{'w','r',g','b','m'},"Books");
-%   patchhl=sunburstplot(filename,{[ .945 .345 .329],[ .376 .741 .408]},'Books',1);
+%   [patchhl labelhl]=sunburstplot(filename,{[ .945 .345 .329],[ .376 .741 .408]},'Books',1);
 
 % Default values if no variable arguments are provided
 clrmp=[];
-Rootlabel="";%Label to appear at root
-valflag=2;% value display flag
-rotflag=1;% label rotation flag
-rootrad=0.5;%Radius of root label circle
-secwidth=1.25;%width of circle rings
-ringgap=0.0;%space between subsequent rings
-stangle=pi/2*0;%starting angle of first sector
-alpharange=[0.5 0.2]; %patch transparency range
+Rootlabel="";   % Label to appear at root
+valflag=2;      % value display flag
+rotflag=1;      % label rotation flag
+rootrad=0.5;    % Radius of root label circle
+secwidth=1.25;  % width of circle rings
+ringgap=0.0;    % space between subsequent rings
+stangle=pi/2*0; % starting angle of first sector
+stdir=1;        % patch plotting direction
+alpharange=[0.5 0.2]; % patch transparency range
 fontnm='Arial'; %text font name
-fontpt=11; %font size
+fontpt=11;      % font size
 
 % data reading
 if strcmp(filename(end-3:end),'xlsx') || strcmp(filename(end-2:end),'xls')
@@ -50,12 +55,12 @@ if strcmp(filename(end-3:end),'xlsx') || strcmp(filename(end-2:end),'xls')
 else
     datatree=readtable(filename);
 end
-for i=1:size(datatree,2) %convert cells to string arrays
+for i=1:size(datatree,2) % convert cells to string arrays
     if ~isnumeric(eval(['datatree.Var' num2str(i)]))
         eval(['datatree.Var' num2str(i) '=string(datatree.Var' num2str(i) ');']);
     else
         if i==size(datatree,2)
-            valcolflag=1; %last column contain numbers
+            valcolflag=1; % last column contain numbers
         else
             error('All Columns should contain labels except last column which can contain numbers');
         end
@@ -89,20 +94,23 @@ for i=1:length(varargin)
             error('Too many input arguments');
     end
 end
-%if last column does not contain numbers then add column of 1 for counting labels
+% if last column does not contain numbers then add column of 1 for counting labels
 if ~exist('valcolflag','var')
     datatree(:,size(datatree,2)+1)=num2cell(ones(size(datatree,1),1));
 end
-colno=size(datatree,2)-1; %number of rings
+colno=size(datatree,2)-1; % number of rings
 
 % collect sector labels and remove any empty labels
 seclabels=cell(1,colno);
 for i=1:colno
     seclabels(i)={unique(string(table2cell(datatree(:,i))))};
     seclabels{i}(seclabels{:,i}=="" | seclabels{:,i}==" " | ismissing(seclabels{:,i}))=[];
+    if stdir
+        seclabels{i}=fliplr(seclabels{i});
+    end
 end
 
-%specify sector order if desired otherwise ascending label-wise
+% specify sector order if desired otherwise ascending label-wise
 % seclabels{1}=seclabels{1}([1 2 4 3],1);
 % seclabels{2}=seclabels{2}([2 1 3],1);
 % seclabels{3}=seclabels{3}([2 1],1);
@@ -111,44 +119,48 @@ branches = size(seclabels{1},1); % number of branches in first ring
 % generate or correct branches colormap
 if isempty(clrmp)
     clrmp=num2cell(distinguishable_colors(branches),2);
-elseif ~(size(clrmp,2)==branches) %ignore colormap if supplied colormap does not have each branch color
-    clrmp=num2cell(distinguishable_colors(branches),2); %color is determined  by number of branches
+elseif ~(size(clrmp,2)==branches) % ignore colormap if supplied colormap does not have each branch color
+    clrmp=num2cell(distinguishable_colors(branches),2); % color is determined  by number of branches
     warning('Supplied colormap is ignored because of incorrect color values. Supply color value for each branch only');
 end
-hl=zeros(branches,1);%patch handles variable initialization
-patchalphab=max(alpharange); %transperancy will increase outward
+phl=zeros(branches,1);thl=zeros(branches,1);% patch and label handles variable initialization
+patchalphab=max(alpharange); % transperancy will increase outward
 for i=1:colno
     switch i
         case 2
             leaves1 = size(seclabels{2},1);
-            hl=zeros(branches,leaves1+1);%patch handles variable initialization
-            patchalphal1=min(alpharange);
+            phl=zeros(branches,leaves1+1);thl=zeros(branches,leaves1+1);% patch and label handles variable initialization
+            patchalphal1=min(alpharange); % patch transperancy assignment
         case 3
             leaves2 = size(seclabels{3},1);
-            hl=zeros(branches,leaves1+1,leaves2+1);%patch handles variable initialization
+            % patch and label handles variable initialization
+            phl=zeros(branches,leaves1+1,leaves2+1);thl=zeros(branches,leaves1+1,leaves2+1);
+            % patch transperancy assignment
             patchalphal1=mean(alpharange);patchalphal2=min(alpharange);
         case 4
             leaves3 = size(seclabels{4},1);
-            hl=zeros(branches,leaves1+1,leaves2+1,leaves3+1);%patch handles variable initialization
+            % patch and label handles variable initialization
+            phl=zeros(branches,leaves1+1,leaves2+1,leaves3+1);thl=zeros(branches,leaves1+1,leaves2+1,leaves3+1);
+            % patch transperancy assignment
             dum=linspace(max(alpharange),min(alpharange),4);
             patchalphal1=dum(2);patchalphal2=dum(3);patchalphal3=dum(4);
     end
 end
 
 % sunburst plotting code
-fractang=stangle;%starting angle for first sector in each ring
-for i = 1:branches %sector plotting is done branch-wise
+fractang=stangle;% starting angle for first sector in each ring
+for i = 1:branches % sector plotting is done branch-wise
     subdata=datatree(string(table2cell(datatree(:,1)))==seclabels{1}(i),:);
     frac=nansum(table2array(subdata(:,end)))./nansum(table2array(datatree(:,end)));
     fractang = [fractang,fractang+frac.*(2*pi)];
     
-    r0 = rootrad;r1 = rootrad+(secwidth-ringgap);%width of sector
+    r0 = rootrad;r1 = rootrad+(secwidth-ringgap);% width of sector
     cl = clrmp{i};% sector color-color remains same for branches but transparency change
     
-    if (fractang(2)-fractang(1))~=0 %plot if sector exists
-        hl(i,1)=polsect(fractang(1),fractang(2),r0,r1,cl,patchalphab); %plot sector
+    if (fractang(2)-fractang(1))~=0 % plot if sector exists
+        phl(i,1)=polsect(fractang(1),fractang(2),r0,r1,cl,patchalphab); % plot sector
         labelRadius=(r0+r1)/2;centerTheta=mean(fractang);
-        [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,45);%get text rotation and text alignment
+        [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,45);% get text rotation and text alignment
         [xtext,ytext] = pol2cart(centerTheta,labelRadius);
         switch valflag
             case 0
@@ -158,18 +170,18 @@ for i = 1:branches %sector plotting is done branch-wise
             case 2
                 labelf=[seclabels{1}(i) num2str(round(frac*100))+"%"];
         end
-        text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
+        thl(i,1)=text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
     end
-    if exist('leaves1','var') %if level1 leaves column is present
+    if exist('leaves1','var') % if level1 leaves column is present
         fractangl1=fractang(1);phl1id=2;
         for j=1:leaves1
-            r0 = rootrad+secwidth;r1 = rootrad+secwidth+(secwidth-ringgap);%width of sector
+            r0 = rootrad+secwidth;r1 = rootrad+secwidth+(secwidth-ringgap);% width of sector
             subdata1=subdata(string(table2cell(subdata(:,2)))==seclabels{2}(j),:);
             frac=nansum(table2array(subdata1(:,end)))./nansum(table2array(subdata(:,end)));frac(isnan(frac))=0;
             fractangl1 = [fractangl1,frac.*(fractang(2)-fractang(1))+fractangl1];
             
-            if (fractangl1(2)-fractangl1(1))~=0 %plot if sector exists
-                hl(i,phl1id,1)=polsect(fractangl1(1),fractangl1(2),r0,r1,cl,patchalphal1); %plot sector
+            if (fractangl1(2)-fractangl1(1))~=0 % plot if sector exists
+                phl(i,phl1id,1)=polsect(fractangl1(1),fractangl1(2),r0,r1,cl,patchalphal1); % plot sector
                 labelRadius=(r0+r1)/2;centerTheta=mean(fractangl1);
                 [halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5);
                 [xtext,ytext] = pol2cart(centerTheta,labelRadius);
@@ -181,20 +193,21 @@ for i = 1:branches %sector plotting is done branch-wise
                     case 2
                         labelf=[seclabels{2}(j) num2str(round(frac*100))+"%"];
                 end
-                text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
+                thl(i,phl1id,1)=text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,...
+                    'HorizontalAlignment',halign,'VerticalAlignment',valign);
             else
-                hl(i,phl1id,1)=0;
+                phl(i,phl1id,1)=0;thl(i,phl1id,1)=0;
             end
-            if exist('leaves2','var') %if Level 2 leaves column exist
+            if exist('leaves2','var') % if Level 2 leaves column exist
                 fractangl2=fractangl1(1);phl2id=2;
                 for k=1:leaves2
-                    r0 = rootrad+secwidth*2;r1 = rootrad+secwidth*2+(secwidth-ringgap);%width of sector
+                    r0 = rootrad+secwidth*2;r1 = rootrad+secwidth*2+(secwidth-ringgap);% width of sector
                     subdata2=subdata1(string(table2cell(subdata1(:,3)))==seclabels{3}(k),:);
                     frac=nansum(table2array(subdata2(:,end)))./nansum(table2array(subdata1(:,end)));frac(isnan(frac))=0;
                     fractangl2 = [fractangl2,frac.*(fractangl1(2)-fractangl1(1))+fractangl2];
                     
-                    if (fractangl2(2)-fractangl2(1))~=0 %plot if sector exists
-                        hl(i,phl1id,phl2id)=polsect(fractangl2(1),fractangl2(2),r0,r1,cl,patchalphal2); %plot sector
+                    if (fractangl2(2)-fractangl2(1))~=0 % plot if sector exists
+                        phl(i,phl1id,phl2id)=polsect(fractangl2(1),fractangl2(2),r0,r1,cl,patchalphal2); % plot sector
                         labelRadius=(r0+r1)/2;centerTheta=mean(fractangl2);[halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5/2);
                         [xtext,ytext] = pol2cart(centerTheta,labelRadius);
                         switch valflag
@@ -205,20 +218,21 @@ for i = 1:branches %sector plotting is done branch-wise
                             case 2
                                 labelf=[seclabels{3}(k) num2str(round(frac*100))+"%"];
                         end
-                        text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
+                        thl(i,phl1id,phl2id)=text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,...
+                            'HorizontalAlignment',halign,'VerticalAlignment',valign);
                     else
-                        hl(i,phl1id,phl2id)=0;
+                        phl(i,phl1id,phl2id)=0;thl(i,phl1id,phl2id)=0;
                     end
-                    if exist('leaves3','var') %if Level 3 leaves column exist
+                    if exist('leaves3','var') % if Level 3 leaves column exist
                         fractangl3=fractangl2(1);phl3id=2;
                         for m=1:leaves3
-                            r0 = rootrad+secwidth*3;r1 = rootrad+secwidth*3+(secwidth-ringgap);%width of sector
+                            r0 = rootrad+secwidth*3;r1 = rootrad+secwidth*3+(secwidth-ringgap);% width of sector
                             subdata3=subdata2(string(table2cell(subdata2(:,4)))==seclabels{4}(m),:);
                             frac=nansum(table2array(subdata3(:,end)))./nansum(table2array(subdata2(:,end)));frac(isnan(frac))=0;
                             fractangl3 = [fractangl3,frac.*(fractangl2(2)-fractangl2(1))+fractangl3];
                             
-                            if (fractangl3(2)-fractangl3(1))~=0 %plot if sector exists
-                                hl(i,phl1id,phl2id,phl3id)=polsect(fractangl3(1),fractangl3(2),r0,r1,cl,patchalphal3); %plot sector
+                            if (fractangl3(2)-fractangl3(1))~=0 % plot if sector exists
+                                phl(i,phl1id,phl2id,phl3id)=polsect(fractangl3(1),fractangl3(2),r0,r1,cl,patchalphal3); % plot sector
                                 labelRadius=(r0+r1)/2;centerTheta=mean(fractangl3);
                                 %[halign,valign,rotang]=getAlignmentFromAngle(centerTheta,rotflag,22.5/2/2);
                                 halign='center';valign='middle';angle=mod(round(centerTheta*180/pi/(22.5/4))*22.5/4,360);
@@ -236,9 +250,10 @@ for i = 1:branches %sector plotting is done branch-wise
                                     case 2
                                         labelf=[seclabels{4}(m) num2str(round(frac*100))+"%"];
                                 end
-                                text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
+                                thl(i,phl1id,phl2id,phl3id)=text(xtext,ytext,labelf,'fontname',fontnm,'fontsize',fontpt,...
+                                    'rotation',rotang,'HorizontalAlignment',halign,'VerticalAlignment',valign);
                             else
-                                hl(i,phl1id,phl2id,phl3id)=0;
+                                phl(i,phl1id,phl2id,phl3id)=0;thl(i,phl1id,phl2id,phl3id)=0;
                             end
                             fractangl3=fractangl3(2);phl3id=phl3id+1;
                         end       
@@ -251,18 +266,9 @@ for i = 1:branches %sector plotting is done branch-wise
     end
     fractang=fractang(2);
 end
-text(0,0,Rootlabel,'fontname',fontnm,'fontsize',fontpt+2,'fontweight','Bold','HorizontalAlignment','center','VerticalAlignment','middle');
+text(0,0,Rootlabel,'fontname',fontnm,'fontsize',fontpt+2,'fontweight','Bold',...
+    'HorizontalAlignment','center','VerticalAlignment','middle');
 axis equal;ax=gca;ax.XAxis.Visible='off';ax.YAxis.Visible='off';
-%{
-% if i==rings
-%     legend1 = legend(legtext);
-%     wi = legend1.Position(3);
-%     Xlm = xlim;
-%     widx = diff(Xlm);
-%     unitwi = widx.*wi;
-%     xlim([Xlm(1),Xlm(2)+unitwi])
-% end
-%}
 end
 function pspatch = polsect(th0,th1,rh0,rh1,cl,patchalpha)
 % This function creates a patch from polar coordinates
@@ -278,6 +284,7 @@ r4 = linspace(rh0,rh0);
 pspatch=patch(X,Y,cl); % Note: patch function takes text or matrix color def
 set(pspatch,'FaceAlpha',patchalpha);
 end
+
 function [halign, valign,rotangle] = getAlignmentFromAngle(angle,rotflag,modangle)
 % Determine the text label alignment and rotation based on the angle around the circle.
 
@@ -288,22 +295,27 @@ angle = (180/pi)*angle;
 angle = mod(round(angle/modangle)*modangle,360);
 
 % Determine the horizontal alignment (center works best usually)
+%{
 if angle == 90 || angle == 270
     halign = 'center';
 elseif angle > 90 && angle < 270
-    halign = 'center';%'right';
+    halign = 'right';
 else
-    halign = 'center';%'left';
+    halign = 'left';
 end
-
+%}
+halign='center';
 % Determine the vertical alignment (middle works best usually)
+%{
 if angle == 0 || angle == 180
     valign = 'middle';
 elseif angle > 180 && angle < 360
-    valign = 'middle';%'top'
+    valign = 'top';
 else
-    valign = 'middle';%'bottom'
+    valign = 'bottom';
 end
+%}
+valign='middle';
 
 % Calculate rotation angle
 if angle>=0 && angle<180
